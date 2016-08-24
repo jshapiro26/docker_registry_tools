@@ -1,5 +1,6 @@
 require 'io/console'
 require 'httparty'
+require 'pry-nav'
 
 # The purpose of this script is to remove old versions of repositories on docker registries with the latest tag.
 # When you push a new latest, the last latest is untagged and takes up diskspace.
@@ -62,13 +63,9 @@ if repos_array.include? repo_name
   puts ""
   puts sha_array
   puts ""
-  puts "We're now pulling the latest image of the #{repo_name} to determine it's SHA"
-  pull_output =  `docker pull #{registry_host}/#{repo_name}`.split("\n")
-  pull_output.each do |line|
-    if line.include?("Digest")
-      @latest_sha = line.gsub("Digest: ", "")
-    end
-  end
+  
+  # Find the SHA for the image currently labeled as latest. We want to keep this image
+  @latest_sha = HTTParty.get("https://#{registry_host}/v2/#{repo_name}/manifests/latest", :basic_auth => auth, :verify => false, :headers => {"Accept" => "application/vnd.docker.distribution.manifest.v2+json"}).headers["docker-content-digest"]
 
   # Remove the latest SHA from the array of SHA's
   sha_array.delete(@latest_sha)
@@ -78,9 +75,7 @@ if repos_array.include? repo_name
   puts ""
   puts "We'll now use the v2 Docker Registry API to mark these images for deletion"
   puts ""
-
-  
-
+ 
   # Mark images for deletion
   sha_array.each do |sha|
     response = HTTParty.delete("https://#{registry_host}/v2/#{repo_name}/manifests/#{sha}", :basic_auth => auth, :verify => false)
